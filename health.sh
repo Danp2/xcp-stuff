@@ -7,7 +7,7 @@ set +H 2>/dev/null || true   # make ! in args no explode
 # =========================
 # config
 # =========================
-ssh_timeout=45                                  # SSH timeot in secs
+ssh_timeout=45                                  # SSH timeout in secs
 dom0_max_used=75                                # dom0 percent disk / storage use allowed before flagging as failed
 dom0_mem_used_max_pct=65                        # dom0 percent memory allowed in use before flagging as failed
 xostor_min_avail_gb=15                          # Minimum RAM dom0 should have if xostor is in use
