@@ -119,7 +119,8 @@ ensure_sshpass() {
   apt-get update -y
   apt-get install -y sshpass
 
-  exec "$0" "${ORIGINAL_ARGS[@]}"
+  # ezez
+  return 0
 }
 
 get_password_from_xoa_db_simple() {
