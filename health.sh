@@ -7,7 +7,7 @@ set +H 2>/dev/null || true   # make ! in args no explode
 # =========================
 # config
 # =========================
-ssh_timeout=45                                  # SSH timeot in secs
+ssh_timeout=45                                  # SSH timeout in secs
 dom0_max_used=75                                # dom0 percent disk / storage use allowed before flagging as failed
 dom0_mem_used_max_pct=65                        # dom0 percent memory allowed in use before flagging as failed
 xostor_min_avail_gb=15                          # Minimum RAM dom0 should have if xostor is in use
@@ -132,8 +132,8 @@ get_password_from_xoa_db_simple() {
   }
 
   # AWK-only parsing so no match is not an error with pipefail
-  xo-server-db ls server "host=$host_only" 2>/dev/null \
-    | awk -F"'" 'tolower($0) ~ /password:/ {print $2; exit}'
+  xo-server-db ls server "host=$host_only" 2>/dev/null | \
+    awk -F"'" 'tolower($0) ~ /password:/ {print $2; exit}'
 }
 
 run_remote() {
@@ -917,7 +917,7 @@ check_xostor_in_use_and_ram() {
   local total_gb_int
   total_gb_int="$(awk -v g="$MEM_TOTAL_GB" 'BEGIN{printf "%d", g+0.00001}')"
 
-  if (( total_gb_int <= xostor_min_avail_gb )); then
+  if (( total_gb_int < xostor_min_avail_gb )); then
     printf "XOSTOR RAM: %s\n" "$(yellow_text "Not Enough: ${MEM_TOTAL_GB}G (Need >${xostor_min_avail_gb}G)")"
     return 1
   else
@@ -1150,8 +1150,8 @@ get_host_uuid_by_address() {
   local pass="$2"
   local ip="$3"     # the address we matching
 
-  run_remote "$host" "$pass" "xe host-list params=uuid,address 2>/dev/null || true" \
-    | awk -v want="$ip" -F': ' '
+  run_remote "$host" "$pass" "xe host-list params=uuid,address 2>/dev/null || true" | \
+    awk -v want="$ip" -F': ' '
         function trim(s){ gsub(/^[[:space:]]+|[[:space:]]+$/,"",s); return s }
 
         /^[[:space:]]*uuid[[:space:]]*\(/    { u=trim($2) }
