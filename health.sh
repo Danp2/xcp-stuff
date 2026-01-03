@@ -1349,6 +1349,8 @@ main() {
     fi
 
     MASTER_POOL_UUID="$(get_pool_uuid "$DETECTED_MASTER_IP" "$pass")"
+    get_pool_host_memory "$pass"
+
     compute_pool_ram_match "$DETECTED_MASTER_IP" "$pass"
 
     MASTER_RPMLIST="$(get_rpm_manifest_remote "$DETECTED_MASTER_IP" "$pass")"
