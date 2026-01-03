@@ -62,6 +62,7 @@ POOLDETAILS_OUTPUT=""
 POOLCONF_SUMMARY=""
 POOL_HOST_IPS=()
 declare -A POOL_HOST_UUIDS=()
+declare -A POOL_HOSTS_MEM=()
 SSH_PORT=22
 PARSED_HOST=""
 ORIGINAL_ARGS=()
@@ -208,6 +209,45 @@ get_pool_host_addresses() {
   done <<< "$out"
 }
 
+get_pool_host_memory() {
+  local pass="$1"
+
+  local ip
+  for ip in "${POOL_HOST_IPS[@]}"; do
+
+    local mi
+    mi="$(run_remote "$ip" "$pass" "awk '
+      /^MemTotal:/ {t=\$2}
+      /^MemAvailable:/ {a=\$2}
+      END {
+        if (t==0) {print \"0 0\"; exit}
+        printf \"%d %d\", int(t/1024), int(a/1024)
+      }
+    ' /proc/meminfo" | tr -d '\r')"
+
+    local tmb amb
+    tmb="$(awk '{print $1}' <<< "$mi")"
+    amb="$(awk '{print $2}' <<< "$mi")"
+
+    if [[ "$tmb" =~ ^[0-9]+$ ]] && [[ "$amb" =~ ^[0-9]+$ ]] && (( tmb > 0 )); then
+      total_mb="$tmb"
+      avail_mb="$amb"
+      if (( total_mb >= avail_mb )); then
+        used_mb=$(( total_mb - avail_mb ))
+      else
+        used_mb=0
+      fi
+    else
+      total_mb=0; used_mb=0; avail_mb=0
+    fi
+    
+    local uuid="${POOL_HOST_UUIDS[$ip]}"
+
+    POOL_HOSTS_MEM[$uuid"_total"]=$total_mb
+    POOL_HOSTS_MEM[$uuid"_used"]=$used_mb
+    POOL_HOSTS_MEM[$uuid"_avail"]=$avail_mb
+  done 
+}
 
 # Pool RAM match
 # round to nearest GB for sanity
