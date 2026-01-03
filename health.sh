@@ -324,14 +324,13 @@ detect_pool_master_by_poolconf() {
 # --- RAM calculatios ---
 load_mem_stats() {
   local host="$1"
-  local pass="$2"
 
   local uuid="${POOL_HOST_UUIDS[$host]}"
 
   local total_mb used_mb avail_mb
-  total_mb=POOL_HOSTS_MEM[$uuid"_total"]
-  used_mb=POOL_HOSTS_MEM[$uuid"_used"]
-  avail_mb=POOL_HOSTS_MEM[$uuid"_avail"]
+  total_mb="${POOL_HOSTS_MEM[$uuid"_total"]}"
+  used_mb="${POOL_HOSTS_MEM[$uuid"_used"]}"
+  avail_mb="${POOL_HOSTS_MEM[$uuid"_avail"]}"
 
   MEM_TOTAL_GB="$(awk -v m="$total_mb" 'BEGIN{printf "%.1f", m/1024}')"
   MEM_USED_PCT="$(awk -v u="$used_mb" -v t="$total_mb" 'BEGIN{ if (t<=0) printf "0.0"; else printf "%.1f", (u/t)*100 }')"
