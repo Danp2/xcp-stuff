@@ -141,6 +141,18 @@ get_password_from_xoa_db_simple() {
     awk -F"'" 'tolower($0) ~ /password:/ {print $2; exit}'
 }
 
+get_first_host_from_xoa_db() {
+
+  command -v xo-server-db >/dev/null 2>&1 || {
+    echo "ERROR: xo-server-db not found in PATH (are you running this on XOA?)." >&2
+    return 1
+  }
+
+  # AWK-only parsing so no match is not an error with pipefail
+  xo-server-db ls server 2>/dev/null | \
+    awk -F"'" 'tolower($0) ~ /host:/ {print $2; exit}'
+}
+
 run_remote() {
   local host="$1"
   local pass="$2"
@@ -1420,6 +1432,16 @@ main() {
   done
 
    [[ $# -le 2 ]] || usage
+
+  # no args = use first host from xo-db
+  if [ "$#" -eq 0 ]; then
+      local first_host="$(get_first_host_from_xoa_db || true)"
+      if [[ -z "$first_host" ]]; then
+        echo "No host IP provided and no hosts found in xo-db, please provide a host IP as an argument"
+        exit 1
+      fi
+      set -- "$first_host"    
+  fi
 
   parse_target_host_and_port "$1"
   local seed_host="$PARSED_HOST"
