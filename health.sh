@@ -58,6 +58,7 @@ cyan_text()   { printf "%s%s%s" "$CYAN" "$1" "$RESET"; }
 
 # globals
 POOL_MODE=1
+FILTER_OUTPUT=0
 DETAILS_OUTPUT=""
 POOLDETAILS_OUTPUT=""
 POOLCONF_SUMMARY=""
@@ -1392,12 +1393,33 @@ fi
 main() {
   ORIGINAL_ARGS=("$@")
 
-  if (( $# >= 2 )) && [[ "${!#}" == "single" ]]; then
-    POOL_MODE=0
-    set -- "${@:1:$(($#-1))}"
+  VALID_ARGS=$(getopt -o fhs --long filter,help,single -- "$@")
+  if [[ $? -ne 0 ]]; then
+      exit 1;
   fi
 
-  [[ $# -ge 1 && $# -le 2 ]] || usage
+  eval set -- "$VALID_ARGS"
+
+  while [ : ]; do
+    case "$1" in
+      -f | --filter)
+          FILTER_OUTPUT=1
+          shift
+          ;;
+      -h | --help)
+          usage
+      ;;
+      -s | --single)
+          POOL_MODE=0
+          shift
+          ;;
+      --) shift; 
+          break 
+          ;;
+    esac
+  done
+
+   [[ $# -le 2 ]] || usage
 
   parse_target_host_and_port "$1"
   local seed_host="$PARSED_HOST"
