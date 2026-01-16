@@ -130,6 +130,46 @@ ensure_sshpass() {
   return 0
 }
 
+print_xoa_status_section() {
+  local out DMESG_ISSUES_BLOCK XOA_CHANNEL XOA_CURRENT XOA_DEBIAN
+
+  out="$(xoa-updater || true)"
+
+  eval "$(
+  awk '
+  /channel selected/ {print "XOA_CHANNEL=\"" $1 "\""}
+  /All up to date/   {print "XOA_CURRENT=1"}
+  ' <<< "$out"
+  )"
+
+  XOA_DEBIAN=$(lsb_release -a | awk '/Description:/ { sub(/^Description:[[:space:]]*/, ""); print }')
+
+  echo "$(cyan_text "== XOA Status ==")"
+
+  if [[ -n "${XOA_CHANNEL:-}" ]]; then
+    printf "XOA Channel: %s\n" "$(green_text "${XOA_CHANNEL}")"
+  else
+    printf "XOA Channel: %s\n" "$(yellow_text '(unknown)')"
+  fi
+
+  if [[ -n "${XOA_CURRENT:-}" ]]; then
+    printf "XOA Status: %s\n" "$(green_text 'Up to date')"
+  else
+    printf "XOA Status: %s\n" "$(yellow_text 'Updates available')"
+  fi
+
+  printf "OS Version: %s\n" "$(green_text "${XOA_DEBIAN}")"
+
+  local dmesg_t="$(dmesg -T)"
+  check_dmesg_content "$dmesg_t"
+
+  if [[ -n "$DMESG_ISSUES_BLOCK" ]]; then
+    append_details "XOA" "Dmesg Issues" "$DMESG_ISSUES_BLOCK"
+  fi
+
+  echo ""
+}
+
 get_password_from_xoa_db_simple() {
   local host_only="$1"
 
@@ -1447,6 +1487,8 @@ main() {
       set -- "$first_host"    
   fi
 
+  print_xoa_status_section
+
   parse_target_host_and_port "$1"
   local seed_host="$PARSED_HOST"
 
@@ -1498,6 +1540,7 @@ main() {
       [[ "$ip" == "$DETECTED_MASTER_IP" ]] && continue
       if ! run_checks_for_host "$ip" "$pass" 0 ""; then overall_rc=1; fi
     done
+
 
     echo
     echo "$(cyan_text "---pool.conf contents---")"
