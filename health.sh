@@ -743,7 +743,8 @@ check_crash_logs_present() {
   local pass="$2"
 
   local cnt
-  cnt="$(run_remote "$host" "$pass" "test -d /var/crash || { echo 0; exit 0; }; find /var/crash -maxdepth 1 -type f ! -name '$crash_ignore_file' 2>/dev/null | wc -l")"
+  # Use maxdepth 2 because crash files will be in subdirectories
+  cnt="$(run_remote "$host" "$pass" "test -d /var/crash || { echo 0; exit 0; }; find /var/crash -maxdepth 2 -type f ! -name '$crash_ignore_file' 2>/dev/null | wc -l")"
   cnt="${cnt//[[:space:]]/}"
   [[ -z "$cnt" ]] && cnt=0
 
