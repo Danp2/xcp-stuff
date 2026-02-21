@@ -68,6 +68,7 @@ POOL_HOST_ACCESS_IPS=()
 declare -A POOL_HOST_UUIDS=()
 declare -A POOL_HOSTS_MEM=()
 declare -A POOL_HOSTS_NTP=()
+declare -A POOL_HOSTS_STATUS=()
 SSH_PORT=22
 PARSED_HOST=""
 ORIGINAL_ARGS=()
@@ -371,41 +372,57 @@ check_pool_hosts_access() {
   fi
 }
 
-get_pool_host_addresses() {
+get_pool_host_details() {
   local host="$1"
   local pass="$2"
 
-  # Ask for both fields; don't rely on ordering cuz it seems random ?
+  # Ask for multiple fields; don't rely on ordering cuz it seems random ?
   local out rc
-  if out=$(run_remote "$host" "$pass" "xe host-list params=uuid,address 2>/dev/null"); then
+  if out=$(run_remote "$host" "$pass" "xe host-list params=uuid,address,enabled,multipathing 2>/dev/null"); then
     rc=0
     out=$(tr -d '\r' <<<"$out")
   
     POOL_HOST_IPS=()
     POOL_HOST_UUIDS=()
+    POOL_HOSTS_STATUS=()
 
-    # Build address -> uuid mapping
-    local u="" a=""
-    while IFS= read -r line; do
-      # Match UUID pattern (8-4-4-4-12 hex digits seperated by hyphens)
-      if [[ "$line" =~ ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) ]]; then
-        u="${BASH_REMATCH[1]}"
-      fi
-      # Match IPv4 pattern (v6 is definitely going to break this)
-      if [[ "$line" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}) ]]; then
-        a="${BASH_REMATCH[1]}"
-      fi
+    eval "$(
+      printf '%s\n' "$out"  | awk '
+      function trim(s){ gsub(/^[[:space:]]+|[[:space:]]+$/,"",s); return s }
 
-      # When we have both, store them
-      if [[ -n "$u" && -n "$a" ]]; then
-        if [[ -z "${POOL_HOST_UUIDS[$a]+x}" ]]; then
-          POOL_HOST_IPS+=("$a")
-        fi
-        POOL_HOST_UUIDS["$a"]="$u"
-        u=""
-        a=""
-      fi
-    done <<< "$out"
+      BEGIN { idx = -1 }
+
+      /^[[:space:]]*uuid[[:space:]]*\(/   {
+          idx++
+          split($0, a, /: /)
+          uuid[idx] = a[2]
+      }
+
+      /^[[:space:]]*address[[:space:]]*\(/ {
+          split($0, a, /: /)
+          addr[idx] = a[2]
+      }
+
+      /^[[:space:]]*enabled[[:space:]]*\(/ {
+          split($0, a, /: /)
+          en[idx] = a[2]
+      }
+
+      /^[[:space:]]*multipathing[[:space:]]*\(/ {
+          split($0, a, /: /)
+          mp[idx] = a[2]
+      }
+
+      END {
+        for (i = 0; i <= idx; i++) {
+          printf "POOL_HOST_UUIDS[\"%s\"]=\"%s\"\n", addr[i], uuid[i]
+          printf "POOL_HOST_IPS+=(\"%s\")\n", addr[i]
+          printf "POOL_HOSTS_STATUS[\"%s_enabled\"]=\"%s\"\n", uuid[i], en[i]
+          printf "POOL_HOSTS_STATUS[\"%s_multipath\"]=\"%s\"\n", uuid[i], mp[i]
+        }
+      }
+      '
+    )"
   else
     rc=$?
     echo "SSH failed when trying to get pool host list from $host (exit code $rc)" >&2
@@ -705,6 +722,38 @@ check_uptime() {
 
   up="${up:-Unknown}"
   printf "Uptime: %s\n" "$up"
+  return 0
+}
+
+check_enabled() {
+  local ip="$1"
+
+  local uuid enabled
+  uuid="${POOL_HOST_UUIDS[$ip]}"
+  enabled="${POOL_HOSTS_STATUS[${uuid}_enabled]:-Unknown}"
+
+  if [[ "$enabled" == "true" ]]; then
+    printf "Host Enabled: %s\n" "$(green_text "$enabled")"
+  else
+    printf "Host Enabled: %s\n" "$(yellow_text "$enabled")"
+  fi
+
+  return 0
+}
+
+check_multipath() {
+  local ip="$1"
+
+  local uuid mp
+  uuid="${POOL_HOST_UUIDS[$ip]}"
+  mp="${POOL_HOSTS_STATUS[${uuid}_multipath]:-Unknown}"
+
+  if [[ "$mp" == "Unknown" ]]; then
+    printf "Multipathing: %s\n" "$(yellow_text "$mp")"
+  else
+    printf "Multipathing: %s\n" "$(green_text "$mp")"
+  fi
+
   return 0
 }
 
@@ -1644,6 +1693,8 @@ run_checks_for_host() {
 
   check_xcpng_version "$ip" "$pass" || true
   check_uptime "$ip" "$pass"
+  check_enabled "$ip"
+  check_multipath "$ip"
   check_host_timesync "$ip"
 
   local dmesg_t smlog rc
@@ -1838,7 +1889,7 @@ main() {
     fi
   fi
 
-  get_pool_host_addresses "$seed_host" "$pass"
+  get_pool_host_details "$seed_host" "$pass"
 
   if (( ${#POOL_HOST_IPS[@]} == 0 )); then
     echo "ERROR: Could not retrieve pool host addresses from '$seed_host'." >&2
